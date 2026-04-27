@@ -150,7 +150,7 @@ def main():
         model = rfnet.Model(num_cls=num_cls)
     elif args.model == 'mmformer':
         model = mmformer.Model(num_cls=num_cls)
-    elif args.model == 'PNT':
+    elif args.model == 'LFC':
         model = LFC.Model(num_cls=num_cls)
     elif args.model == 'cnn':
         model = cnn.Model(num_cls=num_cls)
@@ -160,15 +160,13 @@ def main():
     # model = model.to(device)
     from torch.nn.parallel import DistributedDataParallel as DDP
     import torch.distributed as dist
-    # 1. 获取当前进程的 local_rank (由 torchrun 自动分配)
+   
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
 
-    # 2. 初始化进程组
     torch.cuda.set_device(local_rank)
     dist.init_process_group(backend='nccl')
     device = torch.device(f"cuda:{local_rank}")
 
-    # 3. 将模型放到对应 GPU 上并包装 DDP
     model = model.to(device)
     model = DDP(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
 
@@ -287,7 +285,7 @@ def main():
     #     model.load_state_dict(model_dict)
     #     logging.info('load ok')
     if args.resume is not None:
-        checkpoint = torch.load(args.resume, weights_only=False, map_location=device)  # 加上 map_location 防 OOM
+        checkpoint = torch.load(args.resume, weights_only=False, map_location=device)  
         pretrained_dict = checkpoint['state_dict']
 
         model_dict = model.module.state_dict()
@@ -309,7 +307,7 @@ def main():
     best_metric = float('inf') if args.val_metric == 'loss' else 0.0
     validation_started = False
     # valid_iter = iter(valid_loader)
-    # 损失
+    
     loss_curve = []
     fuse_cross_curve = []
     fuse_dice_curve = []
@@ -337,7 +335,7 @@ def main():
                 train_iter = iter(train_loader)
                 data = next(train_iter)
             x, target, mask = data[:3]
-            # 将数据移动到指定的 GPU 上
+          
 
             x = x.to(device, non_blocking=True)
             target = target.to(device, non_blocking=True)
@@ -452,7 +450,7 @@ def main():
 
         if epoch >= args.validation_start_epoch - 1:
             if not validation_started:
-                logging.info(f'已达到 {args.validation_start_epoch} 轮, 开始进行验证并监控最佳模型...')
+                logging.info(f'{args.validation_start_epoch} ')
                 validation_started = True
 
             model.eval()
@@ -471,7 +469,7 @@ def main():
 
                     fuse_cross_loss = criterions.softmax_weighted_loss(fuse_pred, val_target, num_cls=num_cls)
                     fuse_dice_loss = criterions.dice_loss(fuse_pred, val_target,
-                                                          num_cls=num_cls)  # 假设您用了brats dice loss
+                                                          num_cls=num_cls)  
                     fuse_loss = fuse_cross_loss + fuse_dice_loss
 
                     total_val_loss += fuse_loss.item()
